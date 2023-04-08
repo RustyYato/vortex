@@ -42,6 +42,10 @@ impl MaelstromClient {
         &self.node_ids
     }
 
+    pub fn message_id(&self) -> u32 {
+        self.msg_id
+    }
+
     pub fn read<'de, T: Deserialize<'de>>(&'de mut self) -> Result<Option<Message<T>>, Error> {
         self.buf.clear();
 
