@@ -17,6 +17,8 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("There must be an initialization message")]
     MissingInitMessage,
+    #[error("Detached clients cannot read from stdin")]
+    DetachedClientCantRead,
 }
 
 pub struct Message<Payload> {

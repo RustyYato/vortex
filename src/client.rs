@@ -12,7 +12,7 @@ pub struct MaelstromClient {
     node_id: NodeId,
     node_ids: Vec<NodeId>,
 
-    msg_id: u32,
+    msg_id: Option<u32>,
     stdin: BufReader<Stdin>,
     stdout: BufWriter<Stdout>,
     buf: Vec<u8>,
@@ -23,7 +23,7 @@ impl MaelstromClient {
         let mut client = Self {
             node_id: NodeId::invalid(),
             node_ids: Vec::new(),
-            msg_id: 0,
+            msg_id: Some(0),
             stdin: BufReader::new(std::io::stdin()),
             stdout: BufWriter::new(std::io::stdout()),
             buf: Vec::new(),
@@ -42,11 +42,27 @@ impl MaelstromClient {
         &self.node_ids
     }
 
-    pub fn message_id(&self) -> u32 {
+    pub fn message_id(&self) -> Option<u32> {
         self.msg_id
     }
 
+    /// This client can only send messages without ids and cannot read
+    pub fn detach(&self) -> MaelstromClient {
+        MaelstromClient {
+            node_id: self.node_id,
+            node_ids: self.node_ids.clone(),
+            msg_id: None,
+            stdin: BufReader::new(std::io::stdin()),
+            stdout: BufWriter::new(std::io::stdout()),
+            buf: Vec::new(),
+        }
+    }
+
     pub fn read<'de, T: Deserialize<'de>>(&'de mut self) -> Result<Option<Message<T>>, Error> {
+        if self.msg_id.is_none() {
+            return Err(Error::DetachedClientCantRead);
+        }
+
         self.buf.clear();
 
         let len = match self.stdin.read_until(b'\n', &mut self.buf) {
@@ -75,16 +91,16 @@ impl MaelstromClient {
             &mut self.stdout,
             &resp.raw(
                 self.node_id,
-                if needs_response {
-                    Some(self.msg_id)
-                } else {
-                    None
-                },
+                if needs_response { self.msg_id } else { None },
             ),
         )?;
         self.stdout.write_all(b"\n")?;
         self.stdout.flush()?;
-        self.msg_id += 1;
+
+        if let Some(ref mut msg_id) = self.msg_id {
+            *msg_id += 1;
+        }
+
         Ok(())
     }
 

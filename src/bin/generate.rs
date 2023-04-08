@@ -18,7 +18,7 @@ pub fn main() -> anyhow::Result<()> {
 
     while let Some(message) = client.read::<GeneratePayload>()? {
         client.write(message.response(GenerateResponse::GenerateOk {
-            id: [client.node_id().value(), client.message_id()],
+            id: [client.node_id().value(), client.message_id().unwrap()],
         }))?;
     }
 
