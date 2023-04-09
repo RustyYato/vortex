@@ -82,8 +82,8 @@ impl MaelstromClient {
         Ok(Some(value))
     }
 
-    fn write_<'de, T: Serialize>(
-        &'de mut self,
+    fn write_<T: Serialize>(
+        &mut self,
         resp: &Response<T>,
         needs_response: bool,
     ) -> Result<(), Error> {
@@ -104,15 +104,12 @@ impl MaelstromClient {
         Ok(())
     }
 
-    pub fn write<'de, T: Serialize>(
-        &'de mut self,
-        resp: impl Borrow<Response<T>>,
-    ) -> Result<(), Error> {
+    pub fn write<T: Serialize>(&mut self, resp: impl Borrow<Response<T>>) -> Result<(), Error> {
         self.write_(resp.borrow(), true)
     }
 
-    pub fn write_no_response<'de, T: Serialize>(
-        &'de mut self,
+    pub fn write_no_response<T: Serialize>(
+        &mut self,
         resp: impl Borrow<Response<T>>,
     ) -> Result<(), Error> {
         self.write_(resp.borrow(), false)
@@ -143,7 +140,7 @@ impl MaelstromClient {
     }
 }
 
-#[allow(path_statements)]
+#[allow(path_statements, clippy::no_effect)]
 const _: () = {
     fn assert_send_sync<T: Send + Sync>() {
         //
