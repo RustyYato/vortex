@@ -1,7 +1,7 @@
 #![feature(once_cell)]
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::{Mutex, OnceLock},
 };
 
@@ -39,7 +39,7 @@ struct State {
     values: HashSet<u32>,
     known: HashMap<NodeId, HashSet<u32>>,
     neighbors: Vec<NodeId>,
-    gossip: HashMap<u32, Vec<u32>>,
+    gossip: HashMap<NodeId, BTreeMap<u32, Vec<u32>>>,
 }
 
 fn state() -> &'static Mutex<State> {
@@ -83,7 +83,11 @@ pub fn main() -> anyhow::Result<()> {
 
                     gossip_id += 1;
 
-                    state.gossip.insert(gossip_id, values.clone());
+                    state
+                        .gossip
+                        .entry(n)
+                        .or_default()
+                        .insert(gossip_id, values.clone());
 
                     client.write(vortex::Response {
                         dest: n,
@@ -125,7 +129,14 @@ pub fn main() -> anyhow::Result<()> {
             BroadcastPayload::GossipResponse { gossip_id } => {
                 let state = &mut *state.lock().unwrap();
 
-                let ref values = state.gossip.remove(&gossip_id).unwrap();
+                let Some(gossip) = state
+                .gossip
+                .get_mut(&message.src) else {
+                    continue;
+                };
+
+                let values = &gossip.remove(&gossip_id).unwrap();
+                *gossip = gossip.split_off(&gossip_id);
 
                 let known = state.known.entry(message.src).or_default();
                 known.extend(values);
