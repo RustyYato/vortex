@@ -118,11 +118,12 @@ pub fn main() -> anyhow::Result<()> {
                 gossip_id,
                 ref values,
             } => {
-                let state = &mut *state.lock().unwrap();
+                {
+                    let state = &mut *state.lock().unwrap();
 
-                let known = state.known.entry(message.src).or_default();
-                known.extend(values);
-                state.values.extend(values);
+                    state.known.entry(message.src).or_default().extend(values);
+                    state.values.extend(values);
+                }
 
                 client.write(message.response(BroadcastResponse::GossipResponse { gossip_id }))?;
             }
