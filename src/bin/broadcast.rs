@@ -11,6 +11,7 @@ enum BroadcastPayload {
     },
     Read,
     Topology {
+        #[allow(unused)]
         topology: HashMap<NodeId, Vec<NodeId>>,
     },
 }
