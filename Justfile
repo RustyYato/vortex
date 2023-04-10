@@ -19,3 +19,6 @@ part3d *args:
 part3e *args:
     cargo build --release
     ./maelstrom/maelstrom test -w broadcast --bin ./target/release/multi-node-performance-2 --node-count 25 --time-limit 20 --rate 100 --latency 100
+part4:
+    cargo build --release
+    ./maelstrom/maelstrom test -w g-counter --bin ./target/release/grow --node-count 3 --rate 100 --time-limit 20 --nemesis partition

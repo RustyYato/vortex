@@ -4,20 +4,32 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeId {
-    id: u32,
+    imp: NodeIdImp,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum NodeIdImp {
+    Maelstrom(u32),
+    Node(u32),
+    SeqKv,
 }
 
 impl NodeId {
-    pub(super) fn invalid() -> Self {
-        Self { id: u32::MAX }
+    pub fn seq_kv() -> Self {
+        Self {
+            imp: NodeIdImp::SeqKv,
+        }
     }
 
-    pub fn is_maelstrom_client(self) -> bool {
-        self.id & 1 == 1
+    pub fn is_seq_kv(self) -> bool {
+        matches!(self.imp, NodeIdImp::SeqKv)
     }
 
     pub fn value(self) -> u32 {
-        self.id >> 1
+        match self.imp {
+            NodeIdImp::Maelstrom(value) | NodeIdImp::Node(value) => value,
+            NodeIdImp::SeqKv => u32::MAX,
+        }
     }
 }
 
@@ -26,15 +38,15 @@ impl Serialize for NodeId {
     where
         S: serde::Serializer,
     {
+        let mut output = [0u8; 1 + core::mem::size_of::<itoa::Buffer>()];
+        output[0] = match self.imp {
+            NodeIdImp::Maelstrom(_) => b'c',
+            NodeIdImp::Node(_) => b'n',
+            NodeIdImp::SeqKv => return "seq-kv".serialize(serializer),
+        };
         let mut buf = itoa::Buffer::new();
         let s = buf.format(self.value());
 
-        let mut output = [0u8; 1 + core::mem::size_of::<itoa::Buffer>()];
-        output[0] = if self.is_maelstrom_client() {
-            b'c'
-        } else {
-            b'n'
-        };
         output[1..][..s.len()].copy_from_slice(s.as_bytes());
         let value = unsafe { core::str::from_utf8_unchecked(&output[..1 + s.len()]) };
 
@@ -69,7 +81,15 @@ impl<'de> Deserialize<'de> for NodeId {
                         )
                     })?;
                     Ok(NodeId {
-                        id: id << 1 | (is_maelstrom_client as u32),
+                        imp: if is_maelstrom_client {
+                            NodeIdImp::Maelstrom(id)
+                        } else {
+                            NodeIdImp::Node(id)
+                        },
+                    })
+                } else if v == "seq-kv" {
+                    Ok(NodeId {
+                        imp: NodeIdImp::SeqKv,
                     })
                 } else {
                     Err(serde::de::Error::invalid_type(

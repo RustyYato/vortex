@@ -21,7 +21,7 @@ pub struct MaelstromClient {
 impl MaelstromClient {
     pub fn new() -> Result<Self, Error> {
         let mut client = Self {
-            node_id: NodeId::invalid(),
+            node_id: NodeId::seq_kv(),
             node_ids: Vec::new(),
             msg_id: Some(0),
             stdin: BufReader::new(std::io::stdin()),
