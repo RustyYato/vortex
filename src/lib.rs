@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 mod client;
+pub mod kv;
 mod node_id;
 
 pub use client::MaelstromClient;

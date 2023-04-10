@@ -1,11 +1,9 @@
-use std::borrow::Cow;
-
 use serde::{Deserialize, Serialize};
 use vortex::{MaelstromClient, Response};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
-enum GrowPayload<'a> {
+enum GrowPayload {
     Add {
         delta: u32,
     },
@@ -13,7 +11,7 @@ enum GrowPayload<'a> {
     #[serde(rename = "cas_ok")]
     KvCasOk,
     Error {
-        text: Cow<'a, str>,
+        text: Error,
     },
     #[serde(rename = "read_ok")]
     KvReadOk {
@@ -38,6 +36,13 @@ enum GrowResponse<'a> {
     KvRead {
         key: &'a str,
     },
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case", untagged)]
+enum Error {
+    KeyDoesNotExist(vortex::kv::KeyDoesNotExistError),
+    CasError(vortex::kv::CasError),
 }
 
 const COUNTER: &str = "counter";
@@ -105,28 +110,41 @@ pub fn main() -> anyhow::Result<()> {
             GrowPayload::Error { text } => {
                 let resp = message.in_reply_to.unwrap();
 
-                let Ok(msg) = cas_messages.binary_search_by_key(&resp, |&(msg_id, ..)| msg_id) else {
-                    continue;
-                };
+                match text {
+                    Error::CasError(error) => {
+                        let Ok(msg) = cas_messages.binary_search_by_key(&resp, |&(msg_id, ..)| msg_id) else {
+                            continue;
+                        };
 
-                if let Some(text) = text.strip_prefix("current value ") {
-                    let (current, _) = text.split_once(" is not ").unwrap();
-                    current_value = current.parse::<u32>().unwrap();
+                        let (_, delta) = cas_messages.remove(msg);
+                        let value = error.actual;
 
-                    let (_, delta) = cas_messages.remove(msg);
+                        let msg_id = client.write(Response {
+                            dest: vortex::NodeId::seq_kv(),
+                            in_reply_to: None,
+                            payload: GrowResponse::KvCas {
+                                key: COUNTER,
+                                from: value,
+                                to: value + delta,
+                                create_if_not_exists: true,
+                            },
+                        })?;
+                        cas_messages.clear();
+                        cas_messages.push((msg_id, delta));
+                    }
+                    Error::KeyDoesNotExist(_) => {
+                        let Ok(id) = read_messages.binary_search_by_key(&message.in_reply_to, |&(id, ..)| Some(id)) else {
+                        continue;
+                    };
 
-                    let msg_id = client.write(Response {
-                        dest: vortex::NodeId::seq_kv(),
-                        in_reply_to: None,
-                        payload: GrowResponse::KvCas {
-                            key: COUNTER,
-                            from: current_value,
-                            to: current_value + delta,
-                            create_if_not_exists: true,
-                        },
-                    })?;
-                    cas_messages.clear();
-                    cas_messages.push((msg_id, delta));
+                        let (_, dest, in_reply_to) = read_messages.remove(id);
+
+                        client.write(Response {
+                            dest,
+                            in_reply_to,
+                            payload: GrowResponse::ReadOk { value: 0 },
+                        })?;
+                    }
                 }
             }
         }
