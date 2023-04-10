@@ -45,7 +45,7 @@ const COUNTER: &str = "counter";
 pub fn main() -> anyhow::Result<()> {
     let mut client = MaelstromClient::new()?;
 
-    let mut value = 0;
+    let mut current_value = 0;
 
     let mut cas_messages = Vec::new();
     let mut read_messages = Vec::new();
@@ -60,8 +60,8 @@ pub fn main() -> anyhow::Result<()> {
                     in_reply_to: None,
                     payload: GrowResponse::KvCas {
                         key: COUNTER,
-                        from: value,
-                        to: value + delta,
+                        from: current_value,
+                        to: current_value + delta,
                         create_if_not_exists: true,
                     },
                 })?;
@@ -84,6 +84,8 @@ pub fn main() -> anyhow::Result<()> {
 
                 let (_, dest, in_reply_to) = read_messages.remove(id);
 
+                current_value = value;
+
                 client.write(Response {
                     dest,
                     in_reply_to,
@@ -98,7 +100,7 @@ pub fn main() -> anyhow::Result<()> {
                 };
 
                 let (_, commited_delta) = cas_messages.remove(msg);
-                value += commited_delta;
+                current_value += commited_delta;
             }
             GrowPayload::Error { text } => {
                 let resp = message.in_reply_to.unwrap();
@@ -109,7 +111,7 @@ pub fn main() -> anyhow::Result<()> {
 
                 if let Some(text) = text.strip_prefix("current value ") {
                     let (current, _) = text.split_once(" is not ").unwrap();
-                    value = current.parse::<u32>().unwrap();
+                    current_value = current.parse::<u32>().unwrap();
 
                     let (_, delta) = cas_messages.remove(msg);
 
@@ -118,8 +120,8 @@ pub fn main() -> anyhow::Result<()> {
                         in_reply_to: None,
                         payload: GrowResponse::KvCas {
                             key: COUNTER,
-                            from: value,
-                            to: value + delta,
+                            from: current_value,
+                            to: current_value + delta,
                             create_if_not_exists: true,
                         },
                     })?;
