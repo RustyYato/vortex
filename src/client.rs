@@ -86,14 +86,9 @@ impl MaelstromClient {
         &mut self,
         resp: &Response<T>,
         needs_response: bool,
-    ) -> Result<(), Error> {
-        serde_json::to_writer(
-            &mut self.stdout,
-            &resp.raw(
-                self.node_id,
-                if needs_response { self.msg_id } else { None },
-            ),
-        )?;
+    ) -> Result<Option<u32>, Error> {
+        let msg_id = if needs_response { self.msg_id } else { None };
+        serde_json::to_writer(&mut self.stdout, &resp.raw(self.node_id, msg_id))?;
         self.stdout.write_all(b"\n")?;
         self.stdout.flush()?;
 
@@ -101,18 +96,18 @@ impl MaelstromClient {
             *msg_id += 1;
         }
 
-        Ok(())
+        Ok(msg_id)
     }
 
-    pub fn write<T: Serialize>(&mut self, resp: impl Borrow<Response<T>>) -> Result<(), Error> {
-        self.write_(resp.borrow(), true)
+    pub fn write<T: Serialize>(&mut self, resp: impl Borrow<Response<T>>) -> Result<u32, Error> {
+        self.write_(resp.borrow(), true).map(Option::unwrap)
     }
 
     pub fn write_no_response<T: Serialize>(
         &mut self,
         resp: impl Borrow<Response<T>>,
     ) -> Result<(), Error> {
-        self.write_(resp.borrow(), false)
+        self.write_(resp.borrow(), false).map(drop)
     }
 
     fn handle_init(&mut self) -> Result<(), Error> {
